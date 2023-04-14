@@ -40,6 +40,8 @@ class TwoWire : public Stream
     void setClock(uint32_t);
     void setPins(uint8_t pinSDA, uint8_t pinSCL);
 
+    bool getLockupFlag(void);
+
     void beginTransmission(uint8_t);
     uint8_t endTransmission(bool stopBit);
     uint8_t endTransmission(void);
@@ -88,7 +90,7 @@ class TwoWire : public Stream
 
     // TX buffer
     RingBuffer txBuffer;
-    uint8_t txAddress;
+    uint16_t txAddress;
 
     // Callback user functions
     void (*onRequestCallback)(void);
@@ -107,3 +109,4 @@ extern TwoWire Wire1;
 #endif
 
 #endif
+
