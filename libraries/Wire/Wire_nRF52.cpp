@@ -32,8 +32,8 @@ extern "C" {
 #include <Adafruit_TinyUSB.h> // for Serial
 
 static uint16_t twi_lockup_recovery_count = 0;
-static volatile uint16_t twi_maxloops = 100 * (F_CPU>>20);
-static volatile uint16_t twi_loopcnt;
+static volatile uint16_t twi_maxloops = 20000; // 100 * (F_CPU>>20);
+static volatile uint16_t twi_loopcnt = 0;
 
 static volatile uint32_t* pincfg_reg(uint32_t pin)
 {
@@ -49,6 +49,19 @@ TwoWire::TwoWire(NRF_TWIM_Type * p_twim, NRF_TWIS_Type * p_twis, IRQn_Type IRQn,
   this->_uc_pinSDA = g_ADigitalPinMap[pinSDA];
   this->_uc_pinSCL = g_ADigitalPinMap[pinSCL];
   transmissionBegun = false;
+}
+
+/***
+ * Returns the TWI timeout flag.
+ * @return true if timeout has occurred since the flag was last cleared.
+ */
+bool TwoWire::getLockupFlag(void)
+{
+  if(twi_lockup_recovery_count > 0) {  
+    twi_lockup_recovery_count = 0;
+    return(false);
+  }
+  return(true);
 }
 
 void TwoWire::begin(void) {
@@ -169,12 +182,12 @@ uint8_t TwoWire::requestFrom(uint8_t address, size_t quantity, bool stopBit)
   
   twi_loopcnt = 0;
   while(!_p_twim->EVENTS_RXSTARTED && !_p_twim->EVENTS_ERROR && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
-  if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
-  _p_twim->EVENTS_RXSTARTED = 0x0UL;
+  if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++; return 4;}
+  _p_twim->EVENTS_RXSTARTED = 0x0UL; 
 
   twi_loopcnt = 0;
   while(!_p_twim->EVENTS_LASTRX && !_p_twim->EVENTS_ERROR && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
-  if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
+  if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;  return 4;}
   _p_twim->EVENTS_LASTRX = 0x0UL;
 
   if (stopBit || _p_twim->EVENTS_ERROR)
@@ -182,7 +195,7 @@ uint8_t TwoWire::requestFrom(uint8_t address, size_t quantity, bool stopBit)
     _p_twim->TASKS_STOP = 0x1UL;
     twi_loopcnt = 0;
     while(!_p_twim->EVENTS_STOPPED && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
-    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
+    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;  return 4;}
     _p_twim->EVENTS_STOPPED = 0x0UL;
   }
   else
@@ -190,7 +203,7 @@ uint8_t TwoWire::requestFrom(uint8_t address, size_t quantity, bool stopBit)
     _p_twim->TASKS_SUSPEND = 0x1UL;
     twi_loopcnt = 0;
     while(!_p_twim->EVENTS_SUSPENDED && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
-    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
+    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;  return 4;}
     _p_twim->EVENTS_SUSPENDED = 0x0UL;
   }
 
@@ -241,13 +254,13 @@ uint8_t TwoWire::endTransmission(bool stopBit)
   
   twi_loopcnt = 0;
   while(!_p_twim->EVENTS_TXSTARTED && !_p_twim->EVENTS_ERROR && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
-  if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
+  if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++; return 4;}
   _p_twim->EVENTS_TXSTARTED = 0x0UL;
 
   if (txBuffer.available()) {
     twi_loopcnt = 0;
     while(!_p_twim->EVENTS_LASTTX && !_p_twim->EVENTS_ERROR && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
-    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
+    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++; return 4;}
   }
   _p_twim->EVENTS_LASTTX = 0x0UL;
 
@@ -256,7 +269,7 @@ uint8_t TwoWire::endTransmission(bool stopBit)
     _p_twim->TASKS_STOP = 0x1UL;
     twi_loopcnt = 0;
     while(!_p_twim->EVENTS_STOPPED && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
-    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
+    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++; return 4;}
     _p_twim->EVENTS_STOPPED = 0x0UL;
   }
   else
@@ -264,7 +277,7 @@ uint8_t TwoWire::endTransmission(bool stopBit)
     _p_twim->TASKS_SUSPEND = 0x1UL;
     twi_loopcnt = 0;
     while(!_p_twim->EVENTS_SUSPENDED && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
-    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
+    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++; return 4;}
     _p_twim->EVENTS_SUSPENDED = 0x0UL;
   }
 
