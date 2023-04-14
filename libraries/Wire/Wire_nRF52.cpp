@@ -35,12 +35,6 @@ static uint16_t twi_lockup_recovery_count = 0;
 static volatile uint16_t twi_maxloops = 100 * (F_CPU>>20);
 static volatile uint16_t twi_loopcnt;
 
-#define SB_WAIT(COND)
-  do { twi_loopcnt = 0; 
-    while(COND && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
-    if (twi_loopcnt >= twi_maxloops) {twi_stop(); twi_init(); twi_lockup_recovery_count++; return;}
-  } while(0)
-
 static volatile uint32_t* pincfg_reg(uint32_t pin)
 {
   NRF_GPIO_Type * port = nrf_gpio_pin_port_decode(&pin);
@@ -172,23 +166,31 @@ uint8_t TwoWire::requestFrom(uint8_t address, size_t quantity, bool stopBit)
   _p_twim->RXD.PTR = (uint32_t)rxBuffer._aucBuffer;
   _p_twim->RXD.MAXCNT = quantity;
   _p_twim->TASKS_STARTRX = 0x1UL;
-
-  SB_WAIT(!_p_twim->EVENTS_RXSTARTED && !_p_twim->EVENTS_ERROR);
+  
+  twi_loopcnt = 0;
+  while(!_p_twim->EVENTS_RXSTARTED && !_p_twim->EVENTS_ERROR && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
+  if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
   _p_twim->EVENTS_RXSTARTED = 0x0UL;
 
-  SB_WAIT(!_p_twim->EVENTS_LASTRX && !_p_twim->EVENTS_ERROR);
+  twi_loopcnt = 0;
+  while(!_p_twim->EVENTS_LASTRX && !_p_twim->EVENTS_ERROR && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
+  if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
   _p_twim->EVENTS_LASTRX = 0x0UL;
 
   if (stopBit || _p_twim->EVENTS_ERROR)
   {
     _p_twim->TASKS_STOP = 0x1UL;
-    SB_WAIT(!_p_twim->EVENTS_STOPPED);
+    twi_loopcnt = 0;
+    while(!_p_twim->EVENTS_STOPPED && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
+    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
     _p_twim->EVENTS_STOPPED = 0x0UL;
   }
   else
   {
     _p_twim->TASKS_SUSPEND = 0x1UL;
-    SB_WAIT(!_p_twim->EVENTS_SUSPENDED);
+    twi_loopcnt = 0;
+    while(!_p_twim->EVENTS_SUSPENDED && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
+    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
     _p_twim->EVENTS_SUSPENDED = 0x0UL;
   }
 
@@ -236,25 +238,33 @@ uint8_t TwoWire::endTransmission(bool stopBit)
   _p_twim->TXD.MAXCNT = txBuffer.available();
 
   _p_twim->TASKS_STARTTX = 0x1UL;
-
-  SB_WAIT(!_p_twim->EVENTS_TXSTARTED && !_p_twim->EVENTS_ERROR);
+  
+  twi_loopcnt = 0;
+  while(!_p_twim->EVENTS_TXSTARTED && !_p_twim->EVENTS_ERROR && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
+  if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
   _p_twim->EVENTS_TXSTARTED = 0x0UL;
 
   if (txBuffer.available()) {
-    SB_WAIT(!_p_twim->EVENTS_LASTTX && !_p_twim->EVENTS_ERROR);
+    twi_loopcnt = 0;
+    while(!_p_twim->EVENTS_LASTTX && !_p_twim->EVENTS_ERROR && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
+    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
   }
   _p_twim->EVENTS_LASTTX = 0x0UL;
 
   if (stopBit || _p_twim->EVENTS_ERROR)
   {
     _p_twim->TASKS_STOP = 0x1UL;
-    SB_WAIT(!_p_twim->EVENTS_STOPPED);
+    twi_loopcnt = 0;
+    while(!_p_twim->EVENTS_STOPPED && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
+    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
     _p_twim->EVENTS_STOPPED = 0x0UL;
   }
   else
   {
     _p_twim->TASKS_SUSPEND = 0x1UL;
-    SB_WAIT(!_p_twim->EVENTS_SUSPENDED);
+    twi_loopcnt = 0;
+    while(!_p_twim->EVENTS_SUSPENDED && twi_loopcnt < twi_maxloops) { twi_loopcnt++;}
+    if (twi_loopcnt >= twi_maxloops) { twi_lockup_recovery_count++;}
     _p_twim->EVENTS_SUSPENDED = 0x0UL;
   }
 
